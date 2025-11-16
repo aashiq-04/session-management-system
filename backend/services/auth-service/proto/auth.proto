@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "github.com/aashiq-04/session-management-system/backend/services/auth-service";
+
+// Auth Service handles user authentication and authorization
+service AuthService {
+  // Register a new user account
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Login with email and password
+  rpc Login(LoginRequest) returns (LoginResponse);
+  
+  // Validate JWT token
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  
+  // Refresh access token using refresh token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  
+  // Enable MFA for user
+  rpc EnableMFA(EnableMFARequest) returns (EnableMFAResponse);
+  
+  // Verify MFA code
+  rpc VerifyMFA(VerifyMFARequest) returns (VerifyMFAResponse);
+  
+  // Get user profile
+  rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+}
+
+// Device information for tracking
+message DeviceInfo {
+  string device_fingerprint = 1;
+  string device_name = 2;
+  string device_type = 3;  // mobile, desktop, tablet
+  string os = 4;
+  string browser = 5;
+  string ip_address = 6;
+  string user_agent = 7;
+  string location_country = 8;
+  string location_city = 9;
+  double latitude = 10;
+  double longitude = 11;
+}
+
+// Register Request
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string full_name = 3;
+  DeviceInfo device_info = 4;
+}
+
+// Register Response
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+  string user_id = 3;
+  string access_token = 4;
+  string refresh_token = 5;
+}
+
+// Login Request
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  DeviceInfo device_info = 3;
+  string mfa_code = 4;  // optional, only if MFA is enabled
+}
+
+// Login Response
+message LoginResponse {
+  bool success = 1;
+  string message = 2;
+  string user_id = 3;
+  string access_token = 4;
+  string refresh_token = 5;
+  bool mfa_required = 6;
+  string session_id = 7;
+}
+
+// Validate Token Request
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+// Validate Token Response
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  string message = 4;
+}
+
+// Refresh Token Request
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+// Refresh Token Response
+message RefreshTokenResponse {
+  bool success = 1;
+  string message = 2;
+  string access_token = 3;
+  string refresh_token = 4;
+}
+
+// Enable MFA Request
+message EnableMFARequest {
+  string user_id = 1;
+}
+
+// Enable MFA Response
+message EnableMFAResponse {
+  bool success = 1;
+  string message = 2;
+  string secret = 3;  // TOTP secret for QR code
+  string qr_code_url = 4;
+  repeated string backup_codes = 5;
+}
+
+// Verify MFA Request
+message VerifyMFARequest {
+  string user_id = 1;
+  string code = 2;
+}
+
+// Verify MFA Response
+message VerifyMFAResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Get User Profile Request
+message GetUserProfileRequest {
+  string user_id = 1;
+}
+
+// Get User Profile Response
+message GetUserProfileResponse {
+  bool success = 1;
+  string message = 2;
+  UserProfile profile = 3;
+}
+
+// User Profile
+message UserProfile {
+  string id = 1;
+  string email = 2;
+  string full_name = 3;
+  bool is_active = 4;
+  bool mfa_enabled = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}

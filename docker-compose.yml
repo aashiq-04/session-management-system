@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sms_postgres
+    environment:
+      POSTGRES_DB: session_management
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - sms_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d session_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service (gRPC)
+  auth-service:
+    build:
+      context: ./backend/services/auth-service
+      dockerfile: Dockerfile
+    container_name: sms_auth_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=admin123
+      - DB_NAME=session_management
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - GRPC_PORT=50051
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sms_network
+    restart: unless-stopped
+
+  # Session Service (gRPC)
+  session-service:
+    build:
+      context: ./backend/services/session-service
+      dockerfile: Dockerfile
+    container_name: sms_session_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=admin123
+      - DB_NAME=session_management
+      - GRPC_PORT=50052
+      - AUTH_SERVICE_URL=auth-service:50051
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sms_network
+    restart: unless-stopped
+
+  # Audit Service (gRPC)
+  audit-service:
+    build:
+      context: ./backend/services/audit-service
+      dockerfile: Dockerfile
+    container_name: sms_audit_service
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASSWORD=admin123
+      - DB_NAME=session_management
+      - GRPC_PORT=50053
+    ports:
+      - "50053:50053"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sms_network
+    restart: unless-stopped
+
+  # GraphQL Gateway
+  gateway:
+    build:
+      context: ./backend/gateway
+      dockerfile: Dockerfile
+    container_name: sms_gateway
+    environment:
+      - PORT=8080
+      - AUTH_SERVICE_URL=auth-service:50051
+      - SESSION_SERVICE_URL=session-service:50052
+      - AUDIT_SERVICE_URL=audit-service:50053
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - session-service
+      - audit-service
+    networks:
+      - sms_network
+    restart: unless-stopped
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sms_frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/graphql
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    networks:
+      - sms_network
+    restart: unless-stopped
+
+networks:
+  sms_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
