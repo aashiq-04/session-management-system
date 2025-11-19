@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aashiq-04/auth-service/internal/models"
+	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/models"
 )
 
 // UserRepository handles database operations for users

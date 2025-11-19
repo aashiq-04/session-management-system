@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+package session;
+
+option go_package = "github.com/aashiq-04/session-management-system/backend/services/session-service/proto";
+
+// Session Service handles session management and device tracking
+service SessionService {
+  // Get all active sessions for a user
+  rpc GetUserSessions(GetUserSessionsRequest) returns (GetUserSessionsResponse);
+  
+  // Get details of a specific session
+  rpc GetSessionDetails(GetSessionDetailsRequest) returns (GetSessionDetailsResponse);
+  
+  // Revoke a specific session (logout from one device)
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+  
+  // Revoke all sessions for a user (logout from all devices)
+  rpc RevokeAllSessions(RevokeAllSessionsRequest) returns (RevokeAllSessionsResponse);
+  
+  // Get all devices for a user
+  rpc GetUserDevices(GetUserDevicesRequest) returns (GetUserDevicesResponse);
+  
+  // Trust a device
+  rpc TrustDevice(TrustDeviceRequest) returns (TrustDeviceResponse);
+  
+  // Get session statistics
+  rpc GetSessionStats(GetSessionStatsRequest) returns (GetSessionStatsResponse);
+}
+
+// Session information
+message Session {
+  string id = 1;
+  string user_id = 2;
+  string device_id = 3;
+  string device_name = 4;
+  string device_type = 5;
+  string ip_address = 6;
+  string user_agent = 7;
+  string location_country = 8;
+  string location_city = 9;
+  double latitude = 10;
+  double longitude = 11;
+  bool is_active = 12;
+  string created_at = 13;
+  string last_seen_at = 14;
+  string expires_at = 15;
+  bool is_current = 16; // Is this the current session?
+}
+
+// Device information
+message Device {
+  string id = 1;
+  string user_id = 2;
+  string device_fingerprint = 3;
+  string device_name = 4;
+  string device_type = 5;
+  string os = 6;
+  string browser = 7;
+  bool is_trusted = 8;
+  string first_seen_at = 9;
+  string last_seen_at = 10;
+  int32 session_count = 11;
+}
+
+// Get User Sessions Request
+message GetUserSessionsRequest {
+  string user_id = 1;
+  bool include_inactive = 2; // Include revoked/expired sessions
+}
+
+// Get User Sessions Response
+message GetUserSessionsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Session sessions = 3;
+  int32 total_count = 4;
+  int32 active_count = 5;
+}
+
+// Get Session Details Request
+message GetSessionDetailsRequest {
+  string session_id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Get Session Details Response
+message GetSessionDetailsResponse {
+  bool success = 1;
+  string message = 2;
+  Session session = 3;
+}
+
+// Revoke Session Request
+message RevokeSessionRequest {
+  string session_id = 1;
+  string user_id = 2; // For authorization
+  string revoked_by_ip = 3;
+  string reason = 4;
+}
+
+// Revoke Session Response
+message RevokeSessionResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Revoke All Sessions Request
+message RevokeAllSessionsRequest {
+  string user_id = 1;
+  string except_session_id = 2; // Optional: keep current session active
+  string revoked_by_ip = 3;
+  string reason = 4;
+}
+
+// Revoke All Sessions Response
+message RevokeAllSessionsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 revoked_count = 3;
+}
+
+// Get User Devices Request
+message GetUserDevicesRequest {
+  string user_id = 1;
+}
+
+// Get User Devices Response
+message GetUserDevicesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Device devices = 3;
+  int32 total_count = 4;
+  int32 trusted_count = 5;
+}
+
+// Trust Device Request
+message TrustDeviceRequest {
+  string device_id = 1;
+  string user_id = 2; // For authorization
+}
+
+// Trust Device Response
+message TrustDeviceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Get Session Stats Request
+message GetSessionStatsRequest {
+  string user_id = 1;
+}
+
+// Get Session Stats Response
+message GetSessionStatsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 total_sessions = 3;
+  int32 active_sessions = 4;
+  int32 total_devices = 5;
+  int32 trusted_devices = 6;
+  string last_login = 7;
+  string last_login_location = 8;
+  repeated string recent_locations = 9;
+}
