@@ -69,6 +69,7 @@ func (h *SessionHandler) GetUserSessions(ctx context.Context, req *pb.GetUserSes
 		} else if s.LocationCountry != nil {
 			location = *s.LocationCountry
 		}
+		fmt.Println("Ignore",location)
 
 		// Get last seen time
 		lastSeen := s.CreatedAt

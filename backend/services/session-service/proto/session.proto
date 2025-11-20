@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package session;
 
-option go_package = "github.com/aashiq-04/session-management-system/backend/services/session-service/proto";
+option go_package = "github.com/aashiq-04/session-management-system/backend/services/session-service";
 
 // Session Service handles session management and device tracking
 service SessionService {
