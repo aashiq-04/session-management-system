@@ -1,0 +1,266 @@
+# GraphQL Schema for Session Management System
+
+# ==================== Types ====================
+
+type User {
+  id: ID!
+  email: String!
+  fullName: String!
+  isActive: Boolean!
+  mfaEnabled: Boolean!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type AuthPayload {
+  success: Boolean!
+  message: String!
+  userId: String
+  accessToken: String
+  refreshToken: String
+  mfaRequired: Boolean
+  sessionId: String
+}
+
+type Session {
+  id: ID!
+  userId: String!
+  deviceId: String!
+  deviceName: String!
+  deviceType: String!
+  ipAddress: String!
+  userAgent: String
+  locationCountry: String
+  locationCity: String
+  latitude: Float
+  longitude: Float
+  isActive: Boolean!
+  createdAt: String!
+  lastSeenAt: String!
+  expiresAt: String!
+  isCurrent: Boolean!
+}
+
+type Device {
+  id: ID!
+  userId: String!
+  deviceFingerprint: String!
+  deviceName: String!
+  deviceType: String!
+  os: String!
+  browser: String!
+  isTrusted: Boolean!
+  firstSeenAt: String!
+  lastSeenAt: String!
+  sessionCount: Int!
+}
+
+type AuditLog {
+  id: ID!
+  userId: String
+  sessionId: String
+  deviceId: String
+  eventType: String!
+  eventCategory: String!
+  severity: String!
+  ipAddress: String
+  userAgent: String
+  locationCountry: String
+  locationCity: String
+  metadata: String
+  success: Boolean!
+  failureReason: String
+  createdAt: String!
+}
+
+type SecurityAlert {
+  id: ID!
+  userId: String!
+  alertType: String!
+  severity: String!
+  description: String!
+  metadata: String
+  ipAddress: String
+  locationCountry: String
+  locationCity: String
+  isResolved: Boolean!
+  resolvedAt: String
+  createdAt: String!
+}
+
+type SessionStats {
+  totalSessions: Int!
+  activeSessions: Int!
+  totalDevices: Int!
+  trustedDevices: Int!
+  lastLogin: String
+  lastLoginLocation: String
+  recentLocations: [String!]!
+}
+
+type EventCount {
+  eventType: String!
+  count: Int!
+}
+
+type ComplianceReport {
+  totalEvents: Int!
+  successfulLogins: Int!
+  failedLogins: Int!
+  sessionRevocations: Int!
+  securityAlerts: Int!
+  mfaEvents: Int!
+  eventBreakdown: [EventCount!]!
+  topLocations: [String!]!
+}
+
+type DailyActivity {
+  date: String!
+  loginCount: Int!
+  failedLoginCount: Int!
+}
+
+type ActivitySummary {
+  totalLogins: Int!
+  failedLoginAttempts: Int!
+  uniqueDevices: Int!
+  uniqueLocations: Int!
+  dailyActivity: [DailyActivity!]!
+}
+
+type MFASetup {
+  success: Boolean!
+  message: String!
+  secret: String
+  qrCodeUrl: String
+  backupCodes: [String!]
+}
+
+type GenericResponse {
+  success: Boolean!
+  message: String!
+}
+
+type SessionsResponse {
+  success: Boolean!
+  message: String!
+  sessions: [Session!]!
+  totalCount: Int!
+  activeCount: Int!
+}
+
+type DevicesResponse {
+  success: Boolean!
+  message: String!
+  devices: [Device!]!
+  totalCount: Int!
+  trustedCount: Int!
+}
+
+type AuditLogsResponse {
+  success: Boolean!
+  message: String!
+  logs: [AuditLog!]!
+  totalCount: Int!
+}
+
+type SecurityAlertsResponse {
+  success: Boolean!
+  message: String!
+  alerts: [SecurityAlert!]!
+  totalCount: Int!
+  unresolvedCount: Int!
+}
+
+type TokenValidationResponse {
+  valid: Boolean!
+  userId: String
+  email: String
+  message: String!
+}
+
+# ==================== Inputs ====================
+
+input DeviceInfoInput {
+  deviceFingerprint: String!
+  deviceName: String!
+  deviceType: String!
+  os: String!
+  browser: String!
+  ipAddress: String!
+  userAgent: String!
+  locationCountry: String
+  locationCity: String
+  latitude: Float
+  longitude: Float
+}
+
+input RegisterInput {
+  email: String!
+  password: String!
+  fullName: String!
+  deviceInfo: DeviceInfoInput!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+  deviceInfo: DeviceInfoInput!
+  mfaCode: String
+}
+
+# ==================== Queries ====================
+
+type Query {
+  # Auth queries
+  me: User!
+  validateToken(token: String!): TokenValidationResponse!
+  
+  # Session queries
+  sessions(includeInactive: Boolean): SessionsResponse!
+  sessionDetails(sessionId: ID!): Session
+  sessionStats: SessionStats!
+  
+  # Device queries
+  devices: DevicesResponse!
+  
+  # Audit queries
+  auditLogs(
+    limit: Int
+    offset: Int
+    eventCategory: String
+    severity: String
+    successOnly: Boolean
+  ): AuditLogsResponse!
+  
+  securityAlerts(
+    includeResolved: Boolean
+    severity: String
+  ): SecurityAlertsResponse!
+  
+  complianceReport(
+    startDate: String
+    endDate: String
+  ): ComplianceReport!
+  
+  activitySummary(days: Int): ActivitySummary!
+}
+
+# ==================== Mutations ====================
+
+type Mutation {
+  # Auth mutations
+  register(input: RegisterInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload!
+  refreshToken(refreshToken: String!): AuthPayload!
+  enableMFA: MFASetup!
+  verifyMFA(code: String!): GenericResponse!
+  
+  # Session mutations
+  revokeSession(sessionId: ID!): GenericResponse!
+  revokeAllSessions(exceptCurrent: Boolean): GenericResponse!
+  trustDevice(deviceId: ID!): GenericResponse!
+  
+  # Security mutations
+  resolveSecurityAlert(alertId: ID!): GenericResponse!
+}

@@ -104,32 +104,79 @@ This system demonstrates advanced microservices architecture, security best prac
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Go 1.21+ (for local development)
-- Node.js 18+ (for local development)
-- Make (optional, for convenience commands)
+- PostgreSQL 15+ (running locally or via Docker)
+- Go 1.21+
+- Node.js 18+
+- Protocol Buffers compiler (protoc)
 
-### Quick Start
+### Quick Start (Local Development)
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/session-management-system.git
+   git clone https://github.com/aashiq-04/session-management-system.git
    cd session-management-system
    ```
 
-2. **Start all services**
+2. **Setup Database**
    ```bash
-   docker-compose up -d
+   # Create database in PostgreSQL
+   psql -U postgres
+   CREATE DATABASE session_management;
+   CREATE USER admin WITH PASSWORD 'admin123';
+   GRANT ALL PRIVILEGES ON DATABASE session_management TO admin;
+   \c session_management
+   \i database/init.sql
+   \q
    ```
 
-3. **Access the application**
+3. **Start Backend Services**
+
+   **Terminal 1 - Auth Service:**
+   ```bash
+   cd backend/services/auth-service
+   # Set environment variables (see .env file)
+   go run cmd/server/main.go
+   ```
+
+   **Terminal 2 - Session Service:**
+   ```bash
+   cd backend/services/session-service
+   # Set environment variables (see .env file)
+   go run cmd/server/main.go
+   ```
+
+   **Terminal 3 - Audit Service:**
+   ```bash
+   cd backend/services/audit-service
+   # Set environment variables (see .env file)
+   go run cmd/server/main.go
+   ```
+
+   **Terminal 4 - GraphQL Gateway:**
+   ```bash
+   cd backend/gateway
+   # Set environment variables (see .env file)
+   go run cmd/server/main.go
+   ```
+
+4. **Start Frontend**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+5. **Access the application**
    - Frontend: http://localhost:3000
    - GraphQL Playground: http://localhost:8080/playground
-   - Database: localhost:5432
+   - Auth Service: localhost:50051 (gRPC)
+   - Session Service: localhost:50052 (gRPC)
+   - Audit Service: localhost:50053 (gRPC)
 
-4. **Test credentials**
-   - Email: demo@example.com
-   - Password: password123
+6. **Create your first account**
+   - Navigate to http://localhost:3000
+   - Click "Create one here"
+   - Register with your email
 
 ### Development Setup
 
@@ -280,9 +327,9 @@ MIT License - feel free to use this for learning and portfolio purposes.
 ## 👤 Author
 
 **Your Name**
-- Portfolio: [yourportfolio.com](https://yourportfolio.com)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
-- GitHub: [@yourusername](https://github.com/yourusername)
+<!-- - Portfolio: [yourportfolio.com](https://yourportfolio.com) -->
+- LinkedIn: [Your LinkedIn](https://linkedin.com/in/mohammed-aashiq)
+- GitHub: [@yourusername](https://github.com/aashiq-04)
 
 ## 🙏 Acknowledgments
 
