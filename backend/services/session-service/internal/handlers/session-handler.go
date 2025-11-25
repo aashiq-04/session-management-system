@@ -27,85 +27,96 @@ func NewSessionHandler(db *sql.DB) *SessionHandler {
 }
 
 // GetUserSessions retrieves all sessions for a user
+// GetUserSessions retrieves all sessions for a user
 func (h *SessionHandler) GetUserSessions(ctx context.Context, req *pb.GetUserSessionsRequest) (*pb.GetUserSessionsResponse, error) {
-	log.Printf("GetUserSessions request received for user: %s", req.UserId)
+    log.Printf("GetUserSessions request received for user: %s", req.UserId)
 
-	sessions, err := h.repo.GetUserSessions(req.UserId, req.IncludeInactive)
-	if err != nil {
-		log.Printf("Failed to get user sessions: %v", err)
-		return &pb.GetUserSessionsResponse{
-			Success: false,
-			Message: "Failed to retrieve sessions",
-		}, nil
-	}
+    sessions, err := h.repo.GetUserSessions(req.UserId, req.IncludeInactive)
+    if err != nil {
+        log.Printf("Failed to get user sessions: %v", err)
+        return &pb.GetUserSessionsResponse{
+            Success: false,
+            Message: "Failed to retrieve sessions",
+        }, nil
+    }
 
-	// Convert to protobuf format
-	pbSessions := make([]*pb.Session, 0, len(sessions))
-	activeCount := 0
+    pbSessions := make([]*pb.Session, 0, len(sessions))
+    activeCount := 0
 
-	for _, s := range sessions {
-		// Check if session is active
-		isActive := s.IsActive && time.Now().Before(s.ExpiresAt)
-		if isActive {
-			activeCount++
-		}
+    for _, s := range sessions {
 
-		// Get device name, default to "Unknown Device"
-		deviceName := "Unknown Device"
-		if s.DeviceName != nil && *s.DeviceName != "" {
-			deviceName = *s.DeviceName
-		}
+        // Determine active status
+        isActive := s.IsActive && time.Now().Before(s.ExpiresAt)
+        if isActive {
+            activeCount++
+        }
 
-		// Get device type
-		deviceType := "unknown"
-		if s.DeviceType != nil {
-			deviceType = *s.DeviceType
-		}
+        // Device name fallback
+        deviceName := "Unknown Device"
+        if s.DeviceName != nil && *s.DeviceName != "" {
+            deviceName = *s.DeviceName
+        }
 
-		// Format location
-		location := ""
-		if s.LocationCity != nil && s.LocationCountry != nil {
-			location = fmt.Sprintf("%s, %s", *s.LocationCity, *s.LocationCountry)
-		} else if s.LocationCountry != nil {
-			location = *s.LocationCountry
-		}
-		fmt.Println("Ignore",location)
+        // Device type fallback
+        deviceType := "unknown"
+        if s.DeviceType != nil && *s.DeviceType != "" {
+            deviceType = *s.DeviceType
+        }
 
-		// Get last seen time
-		lastSeen := s.CreatedAt
-		if s.RevokedAt != nil {
-			lastSeen = *s.RevokedAt
-		}
+        // -------- SAFE LOCATION MERGE ----------
+        var finalLocationCountry string
+        var finalLocationCity string
 
-		pbSession := &pb.Session{
-			Id:              s.ID,
-			UserId:          s.UserID,
-			DeviceId:        s.DeviceID,
-			DeviceName:      deviceName,
-			DeviceType:      deviceType,
-			IpAddress:       s.IPAddress,
-			UserAgent:       getStringValue(s.UserAgent),
-			LocationCountry: getStringValue(s.LocationCountry),
-			LocationCity:    getStringValue(s.LocationCity),
-			Latitude:        getFloat64Value(s.Latitude),
-			Longitude:       getFloat64Value(s.Longitude),
-			IsActive:        isActive,
-			CreatedAt:       s.CreatedAt.Format(time.RFC3339),
-			LastSeenAt:      lastSeen.Format(time.RFC3339),
-			ExpiresAt:       s.ExpiresAt.Format(time.RFC3339),
-			IsCurrent:       false, // Will be set by the client based on current session
-		}
+        if s.LocationCountry != nil {
+            finalLocationCountry = *s.LocationCountry
+        } else {
+            finalLocationCountry = ""
+        }
 
-		pbSessions = append(pbSessions, pbSession)
-	}
+        if s.LocationCity != nil && *s.LocationCity != "" && s.LocationCountry != nil {
+            finalLocationCity = fmt.Sprintf("%s, %s", *s.LocationCity, *s.LocationCountry)
+        } else if s.LocationCountry != nil {
+            finalLocationCity = *s.LocationCountry
+        } else {
+            finalLocationCity = ""
+        }
 
-	return &pb.GetUserSessionsResponse{
-		Success:     true,
-		Message:     "Sessions retrieved successfully",
-		Sessions:    pbSessions,
-		TotalCount:  int32(len(sessions)),
-		ActiveCount: int32(activeCount),
-	}, nil
+        // Last seen logic
+        lastSeen := s.CreatedAt
+        if s.RevokedAt != nil {
+            lastSeen = *s.RevokedAt
+        }
+
+        pbSessions = append(pbSessions, &pb.Session{
+            Id:              s.ID,
+            UserId:          s.UserID,
+            DeviceId:        s.DeviceID,
+            DeviceName:      deviceName,
+            DeviceType:      deviceType,
+            IpAddress:       s.IPAddress,
+            UserAgent:       getStringValue(s.UserAgent),
+
+            // Location safely mapped
+            LocationCountry: finalLocationCountry,
+            LocationCity:    finalLocationCity,
+            Latitude:        getFloat64Value(s.Latitude),
+            Longitude:       getFloat64Value(s.Longitude),
+
+            IsActive:        isActive,
+            CreatedAt:       s.CreatedAt.Format(time.RFC3339),
+            LastSeenAt:      lastSeen.Format(time.RFC3339),
+            ExpiresAt:       s.ExpiresAt.Format(time.RFC3339),
+            IsCurrent:       false,
+        })
+    }
+
+    return &pb.GetUserSessionsResponse{
+        Success:     true,
+        Message:     "Sessions retrieved successfully",
+        Sessions:    pbSessions,
+        TotalCount:  int32(len(sessions)),
+        ActiveCount: int32(activeCount),
+    }, nil
 }
 
 // GetSessionDetails retrieves details of a specific session

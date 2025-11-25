@@ -7,13 +7,30 @@ import (
 	"log"
 	"os"
 	"time"
-
+	"net"
+	"net/http"
 	"github.com/google/uuid"
 	pb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto"
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/models"
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/repository"
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/utils"
 )
+
+
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func floatPtr(f float64) *float64 {
+	if f == 0 {
+		return nil
+	}
+	return &f
+}
+
 
 // AuthHandler implements the AuthService gRPC service
 type AuthHandler struct {
@@ -124,10 +141,10 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		RefreshToken: refreshToken,
 		IPAddress:    req.DeviceInfo.IpAddress,
 		UserAgent:    &req.DeviceInfo.UserAgent,
-		LocationCountry: &req.DeviceInfo.LocationCountry,
-		LocationCity: &req.DeviceInfo.LocationCity,
-		Latitude:     &req.DeviceInfo.Latitude,
-		Longitude:    &req.DeviceInfo.Longitude,
+		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
+		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
+		Latitude:        floatPtr(req.DeviceInfo.Latitude),
+		Longitude:       floatPtr(req.DeviceInfo.Longitude),
 		IsActive:     true,
 		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt:    time.Now(),
@@ -148,10 +165,10 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		EventType:     "user_registered",
 		EventCategory: "authentication",
 		Severity:      "info",
-		IPAddress:     &req.DeviceInfo.IpAddress,
+		IPAddress:     strPtr(req.DeviceInfo.IpAddress),
 		UserAgent:     &req.DeviceInfo.UserAgent,
-		LocationCountry: &req.DeviceInfo.LocationCountry,
-		LocationCity:  &req.DeviceInfo.LocationCity,
+		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
+		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
 		Success:       true,
 		CreatedAt:     time.Now(),
 	})
@@ -274,12 +291,12 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		UserID:       user.ID,
 		DeviceID:     deviceID,
 		RefreshToken: refreshToken,
-		IPAddress:    req.DeviceInfo.IpAddress,
+		IPAddress:    *strPtr(req.DeviceInfo.IpAddress),
 		UserAgent:    &req.DeviceInfo.UserAgent,
-		LocationCountry: &req.DeviceInfo.LocationCountry,
-		LocationCity: &req.DeviceInfo.LocationCity,
-		Latitude:     &req.DeviceInfo.Latitude,
-		Longitude:    &req.DeviceInfo.Longitude,
+		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
+		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
+		Latitude:        floatPtr(req.DeviceInfo.Latitude),
+		Longitude:       floatPtr(req.DeviceInfo.Longitude),
 		IsActive:     true,
 		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt:    time.Now(),
@@ -300,10 +317,10 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		EventType:     "user_login",
 		EventCategory: "authentication",
 		Severity:      "info",
-		IPAddress:     &req.DeviceInfo.IpAddress,
+		IPAddress:     strPtr(req.DeviceInfo.IpAddress),
 		UserAgent:     &req.DeviceInfo.UserAgent,
-		LocationCountry: &req.DeviceInfo.LocationCountry,
-		LocationCity:  &req.DeviceInfo.LocationCity,
+		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
+		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
 		Success:       true,
 		CreatedAt:     time.Now(),
 	})
@@ -539,6 +556,30 @@ func (h *AuthHandler) handleDevice(deviceInfo *pb.DeviceInfo, userID string) (st
 	}
 
 	return deviceID, nil
+}
+func getIPFromContext(ctx context.Context) string {
+	req, ok := ctx.Value("httpRequest").(*http.Request)
+	if !ok || req == nil {
+		return "0.0.0.0"
+	}
+
+	// 1) Check proxy header
+	if forwarded := req.Header.Get("X-Forwarded-For"); forwarded != "" {
+		return forwarded
+	}
+
+	// 2) Check X-Real-IP (nginx)
+	if realIP := req.Header.Get("X-Real-IP"); realIP != "" {
+		return realIP
+	}
+
+	// 3) Fall back
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err == nil {
+		return ip
+	}
+
+	return "0.0.0.0"
 }
 
 // Helper function to create audit log

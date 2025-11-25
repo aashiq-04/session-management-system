@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"os"
-
+	"context"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/rs/cors"
@@ -53,7 +54,12 @@ func main() {
 	mux := http.NewServeMux()
 
 	// GraphQL endpoint with auth middleware
-	mux.Handle("/graphql", middleware.AuthMiddleware(config.JWTSecret)(srv))
+	// mux.Handle("/graphql", middleware.AuthMiddleware(config.JWTSecret)(srv))
+	mux.Handle("/graphql", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), "httpRequest", r)
+		middleware.AuthMiddleware(config.JWTSecret)(srv).ServeHTTP(w, r.WithContext(ctx))
+	}))
+	
 
 	// GraphQL playground (development only)
 	if config.Environment == "development" {
@@ -115,4 +121,26 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+// Extract real IP from headers or remote address
+func getRealIP(r *http.Request) string {
+    // Check X-Forwarded-For first (common proxy header)
+    forwarded := r.Header.Get("X-Forwarded-For")
+    if forwarded != "" {
+        return forwarded
+    }
+
+    // Check X-Real-IP (nginx header)
+    realIP := r.Header.Get("X-Real-IP")
+    if realIP != "" {
+        return realIP
+    }
+
+    // Fall back to remote address
+    ip, _, err := net.SplitHostPort(r.RemoteAddr)
+    if err == nil {
+        return ip
+    }
+
+    return "0.0.0.0"
 }

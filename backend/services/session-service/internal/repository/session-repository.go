@@ -252,10 +252,15 @@ func (r *SessionRepository) GetSessionStats(userID string) (*models.SessionStats
 	
 	// Get recent locations (last 5 unique locations)
 	query = `
-		SELECT DISTINCT 
-		       COALESCE(location_city || ', ' || location_country, location_country, 'Unknown') as location
-		FROM sessions
-		WHERE user_id = $1 AND location_country IS NOT NULL
+		SELECT location
+		FROM (
+			SELECT DISTINCT ON (location_country, location_city)
+				COALESCE(location_city || ', ' || location_country, location_country, 'Unknown') as location,
+				created_at
+			FROM sessions
+			WHERE user_id = $1 AND location_country IS NOT NULL
+			ORDER BY location_country, location_city, created_at DESC
+		) AS unique_locations
 		ORDER BY created_at DESC
 		LIMIT 5
 	`

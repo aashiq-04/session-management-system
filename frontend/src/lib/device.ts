@@ -14,14 +14,58 @@ export interface DeviceInfo {
   longitude?: number;
 }
 
-// Initialize FingerprintJS
+// Initialize FingerprintJS with custom options for stability
 const fpPromise = FingerprintJS.load();
 
-// Get device fingerprint
+// Get device fingerprint with fallback to localStorage
 export const getDeviceFingerprint = async (): Promise<string> => {
-  const fp = await fpPromise;
-  const result = await fp.get();
-  return result.visitorId;
+  try {
+    // Check if we already have a fingerprint stored
+    const storedFingerprint = localStorage.getItem('deviceFingerprint');
+    
+    // If we have a stored fingerprint and it's recent (less than 30 days old)
+    const storedTime = localStorage.getItem('deviceFingerprintTime');
+    if (storedFingerprint && storedTime) {
+      const daysSinceStored = (Date.now() - parseInt(storedTime)) / (1000 * 60 * 60 * 24);
+      if (daysSinceStored < 30) {
+        console.log('Using stored device fingerprint:', storedFingerprint);
+        return storedFingerprint;
+      }
+    }
+    
+    // Generate new fingerprint
+    const fp = await fpPromise;
+    const result = await fp.get();
+    const fingerprint = result.visitorId;
+    
+    // Store for future use
+    localStorage.setItem('deviceFingerprint', fingerprint);
+    localStorage.setItem('deviceFingerprintTime', Date.now().toString());
+    
+    console.log('Generated new device fingerprint:', fingerprint);
+    return fingerprint;
+  } catch (error) {
+    console.error('Fingerprinting failed, using fallback:', error);
+    
+    // Fallback: Create a stable fingerprint from browser characteristics
+    const fallbackData = {
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: navigator.platform,
+      screenResolution: `${screen.width}x${screen.height}`,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    
+    // Create hash of fallback data
+    const fallbackString = JSON.stringify(fallbackData);
+    const fallbackFingerprint = btoa(fallbackString).substring(0, 32);
+    
+    // Store fallback
+    localStorage.setItem('deviceFingerprint', fallbackFingerprint);
+    localStorage.setItem('deviceFingerprintTime', Date.now().toString());
+    
+    return fallbackFingerprint;
+  }
 };
 
 // Detect device type
@@ -65,14 +109,42 @@ const getDeviceName = (): string => {
   return `${os} - ${browser}`;
 };
 
-// Get IP address (we'll use a placeholder - backend will get real IP)
-const getIPAddress = (): string => {
-  return '0.0.0.0'; // Backend will capture the real IP
+// Get location data from IP
+const getLocationData = async (): Promise<{
+  ip: string;
+  country?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+}> => {
+  try {
+    // Using ipapi.co - free tier allows 1000 requests/day
+    const response = await fetch('https://ipapi.co/json/');
+    const data = await response.json();
+    
+    return {
+      ip: data.ip || '0.0.0.0',
+      country: data.country_name,
+      city: data.city,
+      latitude: data.latitude,
+      longitude: data.longitude,
+    };
+  } catch (error) {
+    console.error('Failed to get location data:', error);
+    return {
+      ip: '0.0.0.0',
+      country: undefined,
+      city: undefined,
+      latitude: undefined,
+      longitude: undefined,
+    };
+  }
 };
 
 // Get complete device info
 export const getDeviceInfo = async (): Promise<DeviceInfo> => {
   const fingerprint = await getDeviceFingerprint();
+  const locationData = await getLocationData();
   
   return {
     deviceFingerprint: fingerprint,
@@ -80,8 +152,12 @@ export const getDeviceInfo = async (): Promise<DeviceInfo> => {
     deviceType: getDeviceType(),
     os: getOS(),
     browser: getBrowser(),
-    ipAddress: getIPAddress(),
+    ipAddress: locationData.ip,
     userAgent: navigator.userAgent,
+    locationCountry: locationData.country,
+    locationCity: locationData.city,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
   };
 };
 

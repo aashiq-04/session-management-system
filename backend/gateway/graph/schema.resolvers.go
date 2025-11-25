@@ -7,7 +7,8 @@ package graph
 import (
 	"context"
 	"fmt"
-
+	"net"
+	"net/http"
 	"github.com/aashiq-04/session-management-system/backend/gateway/graph/generated"
 	"github.com/aashiq-04/session-management-system/backend/gateway/graph/model"
 	"github.com/aashiq-04/session-management-system/backend/gateway/middleware"
@@ -15,6 +16,36 @@ import (
 	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	sessionpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/session"
 )
+
+
+func getRealIP(ctx context.Context) string {
+    req, ok := ctx.Value("httpRequest").(*http.Request)
+    if !ok || req == nil {
+        return "0.0.0.0"
+    }
+
+    // Check common proxy/real IP headers
+    ip := req.Header.Get("X-Forwarded-For")
+    if ip != "" {
+        // first IP in the list
+        return ip
+    }
+
+    ip = req.Header.Get("X-Real-IP")
+    if ip != "" {
+        return ip
+    }
+
+    // Fallback to remote address
+    host, _, err := net.SplitHostPort(req.RemoteAddr)
+    if err == nil {
+        return host
+    }
+
+    return "0.0.0.0"
+}
+
+
 //HELPER FUNCTIONS
 func strPtrToVal(s *string) string {
     if s == nil {
@@ -32,13 +63,14 @@ func floatPtrToVal(f *float64) float64 {
 
 // Register creates a new user account
 func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInput) (*model.AuthPayload, error) {
+	ip := getIPFromContext(ctx)
 	deviceInfo := &authpb.DeviceInfo{
 		DeviceFingerprint: input.DeviceInfo.DeviceFingerprint,
 		DeviceName:        input.DeviceInfo.DeviceName,
 		DeviceType:        input.DeviceInfo.DeviceType,
 		Os:                input.DeviceInfo.Os,
 		Browser:           input.DeviceInfo.Browser,
-		IpAddress:         input.DeviceInfo.IPAddress,
+		IpAddress:         ip,
 		UserAgent:         input.DeviceInfo.UserAgent,
 		LocationCountry:   strPtrToVal(input.DeviceInfo.LocationCountry),
 		LocationCity:      strPtrToVal(input.DeviceInfo.LocationCity),
@@ -69,13 +101,14 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 
 // Login authenticates a user
 func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*model.AuthPayload, error) {
+	ip := getIPFromContext(ctx)
 	deviceInfo := &authpb.DeviceInfo{
 		DeviceFingerprint: input.DeviceInfo.DeviceFingerprint,
 		DeviceName:        input.DeviceInfo.DeviceName,
 		DeviceType:        input.DeviceInfo.DeviceType,
 		Os:                input.DeviceInfo.Os,
 		Browser:           input.DeviceInfo.Browser,
-		IpAddress:         input.DeviceInfo.IPAddress,
+		IpAddress:         ip,
 		UserAgent:         input.DeviceInfo.UserAgent,
 		LocationCountry:   strPtrToVal(input.DeviceInfo.LocationCountry),
    		LocationCity:      strPtrToVal(input.DeviceInfo.LocationCity),
