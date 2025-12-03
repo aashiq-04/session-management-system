@@ -8,6 +8,7 @@ import (
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/models"
 )
 
+
 // UserRepository handles database operations for users
 type UserRepository struct {
 	db *sql.DB
@@ -327,4 +328,66 @@ func (r *UserRepository) CreateAuditLog(log *models.AuditLog) error {
 	}
 	
 	return nil
+}
+
+// CreateSecurityAlert creates a security alert
+func (r *UserRepository) CreateSecurityAlert(alert *models.SecurityAlert) error {
+	query := `
+		INSERT INTO security_alerts (id, user_id, alert_type, severity, description,
+		                             metadata, ip_address, location_country, location_city,
+		                             is_resolved, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`
+	
+	_, err := r.db.Exec(
+		query,
+		alert.ID,
+		alert.UserID,
+		alert.AlertType,
+		alert.Severity,
+		alert.Description,
+		alert.Metadata,
+		alert.IPAddress,
+		alert.LocationCountry,
+		alert.LocationCity,
+		alert.IsResolved,
+		alert.CreatedAt,
+	)
+	
+	if err != nil {
+		return fmt.Errorf("failed to create security alert: %w", err)
+	}
+	
+	return nil
+}
+
+// GetLastLoginLocation gets the last login location for a user (excluding current session)
+func (r *UserRepository) GetLastLoginLocation(userID string) (*time.Time, *string, *string, *float64, *float64, error) {
+	// Get the second-to-last session (most recent before current login)
+	query := `
+		SELECT created_at, location_country, location_city, latitude, longitude
+		FROM sessions
+		WHERE user_id = $1 
+		AND location_country IS NOT NULL 
+		AND location_city IS NOT NULL
+		AND latitude IS NOT NULL 
+		AND longitude IS NOT NULL
+		ORDER BY created_at DESC
+		LIMIT 1 OFFSET 0
+	`
+	
+	var createdAt time.Time
+	var country, city string
+	var lat, lon float64
+	
+	err := r.db.QueryRow(query, userID).Scan(&createdAt, &country, &city, &lat, &lon)
+	if err == sql.ErrNoRows {
+		// No previous session found
+		return nil, nil, nil, nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to get last login location: %w", err)
+	}
+	
+	return &createdAt, &country, &city, &lat, &lon, nil
 }

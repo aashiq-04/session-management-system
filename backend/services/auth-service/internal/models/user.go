@@ -78,3 +78,19 @@ type MFABackupCode struct {
 	UsedAt    *time.Time `db:"used_at"`
 	CreatedAt time.Time  `db:"created_at"`
 }
+
+// SecurityAlert represents a detected security anomaly
+type SecurityAlert struct {
+	ID              string     `db:"id"`
+	UserID          string     `db:"user_id"`
+	AlertType       string     `db:"alert_type"`
+	Severity        string     `db:"severity"`
+	Description     string     `db:"description"`
+	Metadata        *string    `db:"metadata"`
+	IPAddress       *string    `db:"ip_address"`
+	LocationCountry *string    `db:"location_country"`
+	LocationCity    *string    `db:"location_city"`
+	IsResolved      bool       `db:"is_resolved"`
+	ResolvedAt      *time.Time `db:"resolved_at"`
+	CreatedAt       time.Time  `db:"created_at"`
+}
