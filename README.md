@@ -8,7 +8,6 @@ This system demonstrates advanced microservices architecture, security best prac
 
 ### Key Features
 
-- **Multi-Factor Authentication (MFA)**: TOTP-based two-factor authentication
 - **Device Identity Tracking**: Fingerprinting and trust scoring for every device
 - **Multi-Device Session Management**: Track and manage sessions across multiple devices
 - **Real-Time Security Dashboard**: Monitor active sessions, login attempts, and security alerts
