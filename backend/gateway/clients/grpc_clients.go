@@ -1,14 +1,14 @@
 package clients
 
 import (
+	"context"
 	"fmt"
 	"log"
 
-	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	auditpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/audit"
+	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	sessionpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/session"
 	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -18,6 +18,7 @@ type GRPCClients struct {
 	AuthClient    authpb.AuthServiceClient
 	SessionClient sessionpb.SessionServiceClient
 	AuditClient   auditpb.AuditServiceClient
+	AuthzClient   authzpb.AuthorizationServiceClient
 }
 
 // NewGRPCClients creates and initializes all gRPC clients
@@ -47,5 +48,30 @@ func NewGRPCClients(authURL, sessionURL, auditURL string) (*GRPCClients, error) 
 		AuthClient:    authpb.NewAuthServiceClient(authConn),
 		SessionClient: sessionpb.NewSessionServiceClient(sessionConn),
 		AuditClient:   auditpb.NewAuditServiceClient(auditConn),
+		AuthzClient:   authzpb.NewAuthorizationServiceClient(authConn),
 	}, nil
 }
+func (c *GRPCClients) CheckPermission(
+	ctx context.Context,
+	userID string,
+	orgID string,
+	permission string,
+) bool {
+
+	resp, err := c.AuthzClient.CanUserPerform(ctx, &authzpb.AuthorizationRequest{
+		UserId:         userID,
+		OrganizationId: orgID,
+		Permission:     permission,
+	})
+
+	if err != nil {
+		log.Printf("[RBAC][ERROR] user=%s perm=%s err=%v", userID, permission, err)
+		return false
+	}
+
+	log.Printf("[RBAC][DRY-RUN] user=%s perm=%s allowed=%v",
+		userID, permission, resp.Allowed)
+
+	return resp.Allowed
+}
+

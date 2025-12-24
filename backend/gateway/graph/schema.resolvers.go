@@ -9,56 +9,57 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"errors"
+
 	"github.com/aashiq-04/session-management-system/backend/gateway/graph/generated"
 	"github.com/aashiq-04/session-management-system/backend/gateway/graph/model"
 	"github.com/aashiq-04/session-management-system/backend/gateway/middleware"
 	auditpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/audit"
 	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	sessionpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/session"
+	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
 )
 
-
 func getRealIP(ctx context.Context) string {
-    req, ok := ctx.Value("httpRequest").(*http.Request)
-    if !ok || req == nil {
-        return "0.0.0.0"
-    }
+	req, ok := ctx.Value("httpRequest").(*http.Request)
+	if !ok || req == nil {
+		return "0.0.0.0"
+	}
 
-    // Check common proxy/real IP headers
-    ip := req.Header.Get("X-Forwarded-For")
-    if ip != "" {
-        // first IP in the list
-        return ip
-    }
+	// Check common proxy/real IP headers
+	ip := req.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		// first IP in the list
+		return ip
+	}
 
-    ip = req.Header.Get("X-Real-IP")
-    if ip != "" {
-        return ip
-    }
+	ip = req.Header.Get("X-Real-IP")
+	if ip != "" {
+		return ip
+	}
 
-    // Fallback to remote address
-    host, _, err := net.SplitHostPort(req.RemoteAddr)
-    if err == nil {
-        return host
-    }
+	// Fallback to remote address
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err == nil {
+		return host
+	}
 
-    return "0.0.0.0"
+	return "0.0.0.0"
 }
 
-
-//HELPER FUNCTIONS
+// HELPER FUNCTIONS
 func strPtrToVal(s *string) string {
-    if s == nil {
-        return ""
-    }
-    return *s
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func floatPtrToVal(f *float64) float64 {
-    if f == nil {
-        return 0
-    }
-    return *f
+	if f == nil {
+		return 0
+	}
+	return *f
 }
 
 // Register creates a new user account
@@ -76,7 +77,6 @@ func (r *mutationResolver) Register(ctx context.Context, input model.RegisterInp
 		LocationCity:      strPtrToVal(input.DeviceInfo.LocationCity),
 		Latitude:          floatPtrToVal(input.DeviceInfo.Latitude),
 		Longitude:         floatPtrToVal(input.DeviceInfo.Longitude),
-	
 	}
 
 	resp, err := r.Clients.AuthClient.Register(ctx, &authpb.RegisterRequest{
@@ -111,9 +111,9 @@ func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*
 		IpAddress:         ip,
 		UserAgent:         input.DeviceInfo.UserAgent,
 		LocationCountry:   strPtrToVal(input.DeviceInfo.LocationCountry),
-   		LocationCity:      strPtrToVal(input.DeviceInfo.LocationCity),
-    	Latitude:          floatPtrToVal(input.DeviceInfo.Latitude),
-    	Longitude:         floatPtrToVal(input.DeviceInfo.Longitude),
+		LocationCity:      strPtrToVal(input.DeviceInfo.LocationCity),
+		Latitude:          floatPtrToVal(input.DeviceInfo.Latitude),
+		Longitude:         floatPtrToVal(input.DeviceInfo.Longitude),
 	}
 
 	mfaCode := ""
@@ -294,7 +294,8 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	}
 
 	if !resp.Success {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, errors.New(err.Error())
+
 	}
 
 	return &model.User{
@@ -398,7 +399,8 @@ func (r *queryResolver) SessionDetails(ctx context.Context, sessionID string) (*
 	}
 
 	if !resp.Success || resp.Session == nil {
-		return nil, fmt.Errorf(resp.Message)
+		return nil, errors.New(err.Error())
+
 	}
 
 	s := resp.Session
@@ -494,6 +496,25 @@ func (r *queryResolver) Devices(ctx context.Context) (*model.DevicesResponse, er
 
 // AuditLogs returns audit logs for the current user
 func (r *queryResolver) AuditLogs(ctx context.Context, limit *int, offset *int, eventCategory *string, severity *string, successOnly *bool) (*model.AuditLogsResponse, error) {
+
+	// ---- RBAC ENFORCEMENT (Step 3B) ----
+	userID := middleware.GetUserIDFromContext(ctx)
+
+	// TEMP: single-org setup
+	orgID := "default-org-id"
+
+	authzResp, err := r.Clients.AuthzClient.CanUserPerform(ctx, &authzpb.AuthorizationRequest{
+		UserId:         userID,
+		OrganizationId: orgID,
+		Permission:     "view_audit_logs",
+	})
+
+	if err != nil || !authzResp.Allowed {
+		return nil, fmt.Errorf("forbidden: insufficient permissions to view audit logs")
+	}
+	// ---- END RBAC ENFORCEMENT ----
+
+
 	user, ok := middleware.GetUserFromContext(ctx)
 	if !ok {
 		return nil, fmt.Errorf("unauthorized")

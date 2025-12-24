@@ -3,20 +3,20 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"time"
-	"net"
-	"encoding/json"
-	"net/http"
-	"github.com/google/uuid"
-	pb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto"
+
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/models"
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/repository"
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/utils"
+	pb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto"
+	"github.com/google/uuid"
 )
-
 
 func strPtr(s string) *string {
 	if s == "" {
@@ -32,11 +32,11 @@ func floatPtr(f float64) *float64 {
 	return &f
 }
 
-
 // AuthHandler implements the AuthService gRPC service
 type AuthHandler struct {
 	pb.UnimplementedAuthServiceServer
 	repo      *repository.UserRepository
+	db        *sql.DB
 	jwtSecret string
 }
 
@@ -49,6 +49,7 @@ func NewAuthHandler(db *sql.DB) *AuthHandler {
 
 	return &AuthHandler{
 		repo:      repository.NewUserRepository(db),
+		db:        db,
 		jwtSecret: jwtSecret,
 	}
 }
@@ -107,8 +108,42 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		}, nil
 	}
 
+	// --- STEP 4A: Create default organization for new user ---
+	orgRepo := repository.NewOrganizationRepository(h.db)
+	orgID := uuid.New().String()
+	err = orgRepo.CreateOrganization(&models.Organization{
+		ID:        orgID,
+		Name:      fmt.Sprintf("%s's Organization", user.FullName),
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		log.Printf("Failed to create organization: %v", err)
+		return &pb.RegisterResponse{
+			Success: false,
+			Message: "Failed to create organization",
+		}, nil
+	}
+
+	err = orgRepo.AddUserToOrganization(userID, orgID, true)
+	if err != nil {
+		log.Printf("Failed to link user to organization: %v", err)
+		return &pb.RegisterResponse{
+			Success: false,
+			Message: "Failed to setup organization",
+		}, nil
+	}
+
+	err = h.repo.AssignRoleToUser(userID, orgID, "ORG_ADMIN")
+	if err != nil {
+		log.Printf("Failed to assign org admin role: %v", err)
+		return &pb.RegisterResponse{
+			Success: false,
+			Message: "Failed to assign admin role",
+		}, nil
+	}
+
 	// Create or get device
-	deviceID,_, err := h.handleDevice(req.DeviceInfo, userID)
+	deviceID, _, err := h.handleDevice(req.DeviceInfo, userID)
 	if err != nil {
 		log.Printf("Failed to handle device: %v", err)
 		// Continue anyway - device tracking is not critical for registration
@@ -136,19 +171,19 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	// Create session
 	sessionID := uuid.New().String()
 	session := &models.Session{
-		ID:           sessionID,
-		UserID:       userID,
-		DeviceID:     deviceID,
-		RefreshToken: refreshToken,
-		IPAddress:    req.DeviceInfo.IpAddress,
-		UserAgent:    &req.DeviceInfo.UserAgent,
+		ID:              sessionID,
+		UserID:          userID,
+		DeviceID:        deviceID,
+		RefreshToken:    refreshToken,
+		IPAddress:       req.DeviceInfo.IpAddress,
+		UserAgent:       &req.DeviceInfo.UserAgent,
 		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
 		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
 		Latitude:        floatPtr(req.DeviceInfo.Latitude),
 		Longitude:       floatPtr(req.DeviceInfo.Longitude),
-		IsActive:     true,
-		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
-		CreatedAt:    time.Now(),
+		IsActive:        true,
+		ExpiresAt:       time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt:       time.Now(),
 	}
 
 	err = h.repo.CreateSession(session)
@@ -159,19 +194,19 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 
 	// Create audit log
 	h.createAuditLog(&models.AuditLog{
-		ID:            uuid.New().String(),
-		UserID:        &userID,
-		SessionID:     &sessionID,
-		DeviceID:      &deviceID,
-		EventType:     "user_registered",
-		EventCategory: "authentication",
-		Severity:      "info",
-		IPAddress:     strPtr(req.DeviceInfo.IpAddress),
-		UserAgent:     &req.DeviceInfo.UserAgent,
+		ID:              uuid.New().String(),
+		UserID:          &userID,
+		SessionID:       &sessionID,
+		DeviceID:        &deviceID,
+		EventType:       "user_registered",
+		EventCategory:   "authentication",
+		Severity:        "info",
+		IPAddress:       strPtr(req.DeviceInfo.IpAddress),
+		UserAgent:       &req.DeviceInfo.UserAgent,
 		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
 		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
-		Success:       true,
-		CreatedAt:     time.Now(),
+		Success:         true,
+		CreatedAt:       time.Now(),
 	})
 
 	log.Printf("User registered successfully: %s", userID)
@@ -261,11 +296,11 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	}
 
 	// Create or get device
-	deviceID,isNewDevice, err := h.handleDevice(req.DeviceInfo, user.ID)
+	deviceID, isNewDevice, err := h.handleDevice(req.DeviceInfo, user.ID)
 	if err != nil {
 		log.Printf("Failed to handle device: %v", err)
 	}
-	
+
 	// Ensure deviceInfo is not nil before using it below.
 	// If nil, create a minimal placeholder so later dereferences don't panic.
 	if req.DeviceInfo == nil {
@@ -282,10 +317,9 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	// Debug log: make it explicit why NewDevice alert may fire
 	log.Printf("Device check: deviceID=%s isNewDevice=%v ip=%s user=%s", deviceID, isNewDevice, ip, req.Email)
 
-
 	// Check for security anomalies
 	// isNewDevice = deviceID!=""&& err==nil
-	h.detectAndCreateAlerts(user.ID,req.DeviceInfo,isNewDevice)
+	h.detectAndCreateAlerts(user.ID, req.DeviceInfo, isNewDevice)
 
 	// Generate JWT tokens
 	accessToken, err := utils.GenerateAccessToken(user.ID, user.Email, h.jwtSecret)
@@ -309,19 +343,19 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	// Create session
 	sessionID := uuid.New().String()
 	session := &models.Session{
-		ID:           sessionID,
-		UserID:       user.ID,
-		DeviceID:     deviceID,
-		RefreshToken: refreshToken,
-		IPAddress:    (req.DeviceInfo.IpAddress),
-		UserAgent:    &req.DeviceInfo.UserAgent,
+		ID:              sessionID,
+		UserID:          user.ID,
+		DeviceID:        deviceID,
+		RefreshToken:    refreshToken,
+		IPAddress:       (req.DeviceInfo.IpAddress),
+		UserAgent:       &req.DeviceInfo.UserAgent,
 		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
 		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
 		Latitude:        floatPtr(req.DeviceInfo.Latitude),
 		Longitude:       floatPtr(req.DeviceInfo.Longitude),
-		IsActive:     true,
-		ExpiresAt:    time.Now().Add(7 * 24 * time.Hour),
-		CreatedAt:    time.Now(),
+		IsActive:        true,
+		ExpiresAt:       time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt:       time.Now(),
 	}
 
 	err = h.repo.CreateSession(session)
@@ -332,19 +366,19 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	// Create audit log
 	userIDCopy := user.ID
 	h.createAuditLog(&models.AuditLog{
-		ID:            uuid.New().String(),
-		UserID:        &userIDCopy,
-		SessionID:     &sessionID,
-		DeviceID:      &deviceID,
-		EventType:     "user_login",
-		EventCategory: "authentication",
-		Severity:      "info",
-		IPAddress:     strPtr(req.DeviceInfo.IpAddress),
-		UserAgent:     &req.DeviceInfo.UserAgent,
+		ID:              uuid.New().String(),
+		UserID:          &userIDCopy,
+		SessionID:       &sessionID,
+		DeviceID:        &deviceID,
+		EventType:       "user_login",
+		EventCategory:   "authentication",
+		Severity:        "info",
+		IPAddress:       strPtr(req.DeviceInfo.IpAddress),
+		UserAgent:       &req.DeviceInfo.UserAgent,
 		LocationCountry: strPtr(req.DeviceInfo.LocationCountry),
 		LocationCity:    strPtr(req.DeviceInfo.LocationCity),
-		Success:       true,
-		CreatedAt:     time.Now(),
+		Success:         true,
+		CreatedAt:       time.Now(),
 	})
 
 	log.Printf("User logged in successfully: %s", user.ID)
@@ -539,21 +573,21 @@ func (h *AuthHandler) GetUserProfile(ctx context.Context, req *pb.GetUserProfile
 }
 
 // Helper function to handle device creation/retrieval
-func (h *AuthHandler) handleDevice(deviceInfo *pb.DeviceInfo, userID string) (string,bool, error) {
+func (h *AuthHandler) handleDevice(deviceInfo *pb.DeviceInfo, userID string) (string, bool, error) {
 	if deviceInfo == nil || deviceInfo.DeviceFingerprint == "" {
-		return "",false, fmt.Errorf("device info is required")
+		return "", false, fmt.Errorf("device info is required")
 	}
 
 	// Check if device exists
 	existingDevice, err := h.repo.GetDeviceByFingerprint(deviceInfo.DeviceFingerprint)
 	if err != nil {
-		return "", false,err
+		return "", false, err
 	}
 
 	if existingDevice != nil {
 		// Update last seen
 		h.repo.UpdateDeviceLastSeen(existingDevice.ID)
-		return existingDevice.ID,false, nil
+		return existingDevice.ID, false, nil
 	}
 
 	// Create new device
@@ -574,10 +608,10 @@ func (h *AuthHandler) handleDevice(deviceInfo *pb.DeviceInfo, userID string) (st
 
 	err = h.repo.CreateDevice(device)
 	if err != nil {
-		return "",true, err
+		return "", true, err
 	}
 
-	return deviceID,true, nil
+	return deviceID, true, nil
 }
 func getIPFromContext(ctx context.Context) string {
 	req, ok := ctx.Value("httpRequest").(*http.Request)
@@ -616,117 +650,117 @@ func (h *AuthHandler) createAuditLog(log *models.AuditLog) {
 // Helper function to create failed login audit log
 func (h *AuthHandler) createFailedLoginAuditLog(email string, deviceInfo *pb.DeviceInfo, reason string) {
 	h.createAuditLog(&models.AuditLog{
-		ID:            uuid.New().String(),
-		EventType:     "login_failed",
-		EventCategory: "authentication",
-		Severity:      "warning",
-		IPAddress:     &deviceInfo.IpAddress,
-		UserAgent:     &deviceInfo.UserAgent,
+		ID:              uuid.New().String(),
+		EventType:       "login_failed",
+		EventCategory:   "authentication",
+		Severity:        "warning",
+		IPAddress:       &deviceInfo.IpAddress,
+		UserAgent:       &deviceInfo.UserAgent,
 		LocationCountry: &deviceInfo.LocationCountry,
-		LocationCity:  &deviceInfo.LocationCity,
-		Success:       false,
-		FailureReason: &reason,
-		CreatedAt:     time.Now(),
+		LocationCity:    &deviceInfo.LocationCity,
+		Success:         false,
+		FailureReason:   &reason,
+		CreatedAt:       time.Now(),
 	})
 }
 
 // Helper function to detect and create security alerts
 func (h *AuthHandler) detectAndCreateAlerts(userID string, deviceInfo *pb.DeviceInfo, isNewDevice bool) {
 
-    // If new device → immediate alert
-    if isNewDevice {
-        alertID := uuid.New().String()
-        alert := &models.SecurityAlert{
-            ID:              alertID,
-            UserID:          userID,
-            AlertType:       "new_device",
-            Severity:        "medium",
-            Description:     "Login from new unrecognized device",
-            Metadata:        nil,
-            IPAddress:       &deviceInfo.IpAddress,
-            LocationCountry: &deviceInfo.LocationCountry,
-            LocationCity:    &deviceInfo.LocationCity,
-            IsResolved:      false,
-            CreatedAt:       time.Now(),
-        }
+	// If new device → immediate alert
+	if isNewDevice {
+		alertID := uuid.New().String()
+		alert := &models.SecurityAlert{
+			ID:              alertID,
+			UserID:          userID,
+			AlertType:       "new_device",
+			Severity:        "medium",
+			Description:     "Login from new unrecognized device",
+			Metadata:        nil,
+			IPAddress:       &deviceInfo.IpAddress,
+			LocationCountry: &deviceInfo.LocationCountry,
+			LocationCity:    &deviceInfo.LocationCity,
+			IsResolved:      false,
+			CreatedAt:       time.Now(),
+		}
 
-        err := h.repo.CreateSecurityAlert(alert)
-        if err != nil {
-            log.Printf("Failed to create new device alert: %v", err)
-        } else {
-            log.Printf("Security alert created: new_device")
-        }
-        return
-    }
+		err := h.repo.CreateSecurityAlert(alert)
+		if err != nil {
+			log.Printf("Failed to create new device alert: %v", err)
+		} else {
+			log.Printf("Security alert created: new_device")
+		}
+		return
+	}
 
-    // Fetch last login
-    lastTime, lastCountry, lastCity, lastLat, lastLon, err := h.repo.GetLastLoginLocation(userID)
-    if err != nil {
-        log.Printf("Failed to get last login location: %v", err)
-        return
-    }
+	// Fetch last login
+	lastTime, lastCountry, lastCity, lastLat, lastLon, err := h.repo.GetLastLoginLocation(userID)
+	if err != nil {
+		log.Printf("Failed to get last login location: %v", err)
+		return
+	}
 
-    // No previous location → cannot check travel
-    if lastTime == nil || lastCountry == nil || lastCity == nil || lastLat == nil || lastLon == nil {
-        log.Printf("No previous location data for travel detection")
-        return
-    }
+	// No previous location → cannot check travel
+	if lastTime == nil || lastCountry == nil || lastCity == nil || lastLat == nil || lastLon == nil {
+		log.Printf("No previous location data for travel detection")
+		return
+	}
 
-    // Missing current location
-    if deviceInfo.LocationCountry == "" || deviceInfo.LocationCity == "" ||
-        deviceInfo.Latitude == 0 || deviceInfo.Longitude == 0 {
-        log.Printf("Current location data incomplete, skipping travel detection")
-        return
-    }
+	// Missing current location
+	if deviceInfo.LocationCountry == "" || deviceInfo.LocationCity == "" ||
+		deviceInfo.Latitude == 0 || deviceInfo.Longitude == 0 {
+		log.Printf("Current location data incomplete, skipping travel detection")
+		return
+	}
 
-    currentLocation := utils.Location{
-        Country:   deviceInfo.LocationCountry,
-        City:      deviceInfo.LocationCity,
-        Latitude:  deviceInfo.Latitude,
-        Longitude: deviceInfo.Longitude,
-    }
+	currentLocation := utils.Location{
+		Country:   deviceInfo.LocationCountry,
+		City:      deviceInfo.LocationCity,
+		Latitude:  deviceInfo.Latitude,
+		Longitude: deviceInfo.Longitude,
+	}
 
-    previousLocation := &utils.Location{
-        Country:   *lastCountry,
-        City:      *lastCity,
-        Latitude:  *lastLat,
-        Longitude: *lastLon,
-    }
+	previousLocation := &utils.Location{
+		Country:   *lastCountry,
+		City:      *lastCity,
+		Latitude:  *lastLat,
+		Longitude: *lastLon,
+	}
 
-    anomaly := utils.DetectAnomalies(currentLocation, previousLocation, lastTime, false)
+	anomaly := utils.DetectAnomalies(currentLocation, previousLocation, lastTime, false)
 
-    if anomaly == nil {
-        return
-    }
+	if anomaly == nil {
+		return
+	}
 
-    alertType := ""
-    if anomaly.ImpossibleTravel {
-        alertType = "impossible_travel"
-    } else if anomaly.NewCountry {
-        alertType = "new_country"
-    }
+	alertType := ""
+	if anomaly.ImpossibleTravel {
+		alertType = "impossible_travel"
+	} else if anomaly.NewCountry {
+		alertType = "new_country"
+	}
 
-    metadataJSON, _ := json.Marshal(anomaly.Details)
-    metadataStr := string(metadataJSON)
+	metadataJSON, _ := json.Marshal(anomaly.Details)
+	metadataStr := string(metadataJSON)
 
-    alert := &models.SecurityAlert{
-        ID:              uuid.New().String(),
-        UserID:          userID,
-        AlertType:       alertType,
-        Severity:        anomaly.Severity,
-        Description:     anomaly.Description,
-        Metadata:        &metadataStr,
-        IPAddress:       &deviceInfo.IpAddress,
-        LocationCountry: &deviceInfo.LocationCountry,
-        LocationCity:    &deviceInfo.LocationCity,
-        IsResolved:      false,
-        CreatedAt:       time.Now(),
-    }
+	alert := &models.SecurityAlert{
+		ID:              uuid.New().String(),
+		UserID:          userID,
+		AlertType:       alertType,
+		Severity:        anomaly.Severity,
+		Description:     anomaly.Description,
+		Metadata:        &metadataStr,
+		IPAddress:       &deviceInfo.IpAddress,
+		LocationCountry: &deviceInfo.LocationCountry,
+		LocationCity:    &deviceInfo.LocationCity,
+		IsResolved:      false,
+		CreatedAt:       time.Now(),
+	}
 
-    err = h.repo.CreateSecurityAlert(alert)
-    if err != nil {
-        log.Printf("Failed to create security alert: %v", err)
-    } else {
-        log.Printf("Security alert created: %s - %s", alertType, anomaly.Description)
-    }
+	err = h.repo.CreateSecurityAlert(alert)
+	if err != nil {
+		log.Printf("Failed to create security alert: %v", err)
+	} else {
+		log.Printf("Security alert created: %s - %s", alertType, anomaly.Description)
+	}
 }

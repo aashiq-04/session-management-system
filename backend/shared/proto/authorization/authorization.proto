@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package authorization;
+
+option go_package = "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization";
+
+service AuthorizationService {
+  rpc CanUserPerform (AuthorizationRequest) returns (AuthorizationResponse);
+}
+
+message AuthorizationRequest {
+  string user_id = 1;
+  string organization_id = 2;
+  string permission = 3;
+}
+
+message AuthorizationResponse {
+  bool allowed = 1;
+}

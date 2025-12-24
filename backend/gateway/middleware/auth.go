@@ -32,7 +32,7 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get token from Authorization header
 			authHeader := r.Header.Get("Authorization")
-			
+
 			// If no auth header, continue without user context
 			if authHeader == "" {
 				next.ServeHTTP(w, r)
@@ -79,4 +79,13 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 func GetUserFromContext(ctx context.Context) (*UserContext, bool) {
 	user, ok := ctx.Value(UserContextKey).(*UserContext)
 	return user, ok
+}
+
+// GetUserIDFromContext retrieves the user ID from context
+func GetUserIDFromContext(ctx context.Context) string {
+	user, ok := GetUserFromContext(ctx)
+	if !ok || user == nil {
+		return ""
+	}
+	return user.UserID
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/models"
 )
 
-
 // UserRepository handles database operations for users
 type UserRepository struct {
 	db *sql.DB
@@ -25,7 +24,7 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 		INSERT INTO users (id, email, password_hash, full_name, is_active, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		user.ID,
@@ -36,11 +35,11 @@ func (r *UserRepository) CreateUser(user *models.User) error {
 		user.CreatedAt,
 		user.UpdatedAt,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -51,7 +50,7 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 		FROM users
 		WHERE email = $1
 	`
-	
+
 	user := &models.User{}
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID,
@@ -64,15 +63,15 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	return user, nil
 }
 
@@ -83,7 +82,7 @@ func (r *UserRepository) GetUserByID(userID string) (*models.User, error) {
 		FROM users
 		WHERE id = $1
 	`
-	
+
 	user := &models.User{}
 	err := r.db.QueryRow(query, userID).Scan(
 		&user.ID,
@@ -96,15 +95,15 @@ func (r *UserRepository) GetUserByID(userID string) (*models.User, error) {
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	return user, nil
 }
 
@@ -116,7 +115,7 @@ func (r *UserRepository) UpdateUser(user *models.User) error {
 		    mfa_secret = $5, updated_at = $6
 		WHERE id = $7
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		user.Email,
@@ -127,11 +126,11 @@ func (r *UserRepository) UpdateUser(user *models.User) error {
 		time.Now(),
 		user.ID,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -142,12 +141,12 @@ func (r *UserRepository) EnableMFA(userID string, secret string) error {
 		SET mfa_enabled = true, mfa_secret = $1, updated_at = $2
 		WHERE id = $3
 	`
-	
+
 	_, err := r.db.Exec(query, secret, time.Now(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to enable MFA: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -158,7 +157,7 @@ func (r *UserRepository) CreateDevice(device *models.Device) error {
 		                     os, browser, is_trusted, first_seen_at, last_seen_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		device.ID,
@@ -173,11 +172,11 @@ func (r *UserRepository) CreateDevice(device *models.Device) error {
 		device.LastSeenAt,
 		device.CreatedAt,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create device: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -189,7 +188,7 @@ func (r *UserRepository) GetDeviceByFingerprint(fingerprint string) (*models.Dev
 		FROM devices
 		WHERE device_fingerprint = $1
 	`
-	
+
 	device := &models.Device{}
 	err := r.db.QueryRow(query, fingerprint).Scan(
 		&device.ID,
@@ -204,15 +203,15 @@ func (r *UserRepository) GetDeviceByFingerprint(fingerprint string) (*models.Dev
 		&device.LastSeenAt,
 		&device.CreatedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil // Device not found, but not an error
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device: %w", err)
 	}
-	
+
 	return device, nil
 }
 
@@ -231,7 +230,7 @@ func (r *UserRepository) CreateSession(session *models.Session) error {
 		                      is_active, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		session.ID,
@@ -248,11 +247,11 @@ func (r *UserRepository) CreateSession(session *models.Session) error {
 		session.ExpiresAt,
 		session.CreatedAt,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -265,7 +264,7 @@ func (r *UserRepository) GetSessionByRefreshToken(refreshToken string) (*models.
 		FROM sessions
 		WHERE refresh_token = $1
 	`
-	
+
 	session := &models.Session{}
 	err := r.db.QueryRow(query, refreshToken).Scan(
 		&session.ID,
@@ -283,15 +282,15 @@ func (r *UserRepository) GetSessionByRefreshToken(refreshToken string) (*models.
 		&session.CreatedAt,
 		&session.RevokedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("session not found")
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
-	
+
 	return session, nil
 }
 
@@ -303,7 +302,7 @@ func (r *UserRepository) CreateAuditLog(log *models.AuditLog) error {
 		                        metadata, success, failure_reason, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		log.ID,
@@ -322,11 +321,11 @@ func (r *UserRepository) CreateAuditLog(log *models.AuditLog) error {
 		log.FailureReason,
 		log.CreatedAt,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create audit log: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -338,7 +337,7 @@ func (r *UserRepository) CreateSecurityAlert(alert *models.SecurityAlert) error 
 		                             is_resolved, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
-	
+
 	_, err := r.db.Exec(
 		query,
 		alert.ID,
@@ -353,11 +352,11 @@ func (r *UserRepository) CreateSecurityAlert(alert *models.SecurityAlert) error 
 		alert.IsResolved,
 		alert.CreatedAt,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create security alert: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -375,11 +374,11 @@ func (r *UserRepository) GetLastLoginLocation(userID string) (*time.Time, *strin
 		ORDER BY created_at DESC
 		LIMIT 1 OFFSET 0
 	`
-	
+
 	var createdAt time.Time
 	var country, city string
 	var lat, lon float64
-	
+
 	err := r.db.QueryRow(query, userID).Scan(&createdAt, &country, &city, &lat, &lon)
 	if err == sql.ErrNoRows {
 		// No previous session found
@@ -388,6 +387,24 @@ func (r *UserRepository) GetLastLoginLocation(userID string) (*time.Time, *strin
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to get last login location: %w", err)
 	}
-	
+
 	return &createdAt, &country, &city, &lat, &lon, nil
+}
+
+// AssignRoleToUser assigns a role to a user in an organization
+func (r *UserRepository) AssignRoleToUser(userID, orgID, roleName string) error {
+	const query = `
+		INSERT INTO user_roles (user_id, organization_id, role_id)
+		SELECT $1, $2, id
+		FROM roles
+		WHERE name = $3
+		LIMIT 1
+	`
+
+	_, err := r.db.Exec(query, userID, orgID, roleName)
+	if err != nil {
+		return fmt.Errorf("failed to assign role %s to user %s in organization %s: %w", roleName, userID, orgID, err)
+	}
+
+	return nil
 }
