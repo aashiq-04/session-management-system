@@ -1,6 +1,6 @@
 .PHONY: proto
 
-PROTO_FILE=proto/auth.proto
+PROTO_FILE=proto/auth.proto proto/authorization.proto
 
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative \

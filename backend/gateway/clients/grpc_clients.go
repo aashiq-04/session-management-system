@@ -7,6 +7,8 @@ import (
 	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	auditpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/audit"
 	sessionpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/session"
+	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

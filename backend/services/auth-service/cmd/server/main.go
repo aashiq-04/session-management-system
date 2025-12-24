@@ -10,10 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/rbac"
+	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/repository"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	// Authorization gRPC
+	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
 
 	"github.com/aashiq-04/session-management-system/backend/services/auth-service/internal/handlers"
 	pb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto"
@@ -23,7 +28,7 @@ func main() {
 	log.Println("Starting Auth Service...")
 
 	// Load configuration from environment variables
-	if err := godotenv.Load(); err != nil{
+	if err := godotenv.Load(); err != nil {
 		log.Println("Error: .env file not found")
 	}
 	config := loadConfig()
@@ -43,6 +48,16 @@ func main() {
 	// Register auth service
 	authHandler := handlers.NewAuthHandler(db)
 	pb.RegisterAuthServiceServer(grpcServer, authHandler)
+
+	// RBAC setip
+	userRepo := repository.NewUserRepository(db)
+	rbacRepo := rbac.NewPostgresRepository(db)
+	rbacAudit := rbac.NewAuditAdapter(userRepo)
+	rbacService := rbac.NewService(rbacRepo, rbacAudit)
+
+	// Register authorization service
+	authzHandler := handlers.NewAuthorizationHandler(rbacService)
+	authzpb.RegisterAuthorizationServiceServer(grpcServer, authzHandler)
 
 	// Enable reflection for grpcurl/grpc-ui
 	reflection.Register(grpcServer)
@@ -74,25 +89,25 @@ func main() {
 
 // Config holds the application configuration
 type Config struct {
-	DBHost    string
-	DBPort    string
-	DBUser    string
+	DBHost     string
+	DBPort     string
+	DBUser     string
 	DBPassword string
-	DBName    string
-	GRPCPort  string
-	JWTSecret string
+	DBName     string
+	GRPCPort   string
+	JWTSecret  string
 }
 
 // loadConfig loads configuration from environment variables
 func loadConfig() Config {
 	config := Config{
-		DBHost:    getEnv("DB_HOST", "localhost"),
-		DBPort:    getEnv("DB_PORT", "5432"),
-		DBUser:    getEnv("DB_USER", "admin"),
+		DBHost:     getEnv("DB_HOST", "localhost"),
+		DBPort:     getEnv("DB_PORT", "5432"),
+		DBUser:     getEnv("DB_USER", "admin"),
 		DBPassword: getEnv("DB_PASSWORD", "admin123"),
-		DBName:    getEnv("DB_NAME", "session_management"),
-		GRPCPort:  getEnv("GRPC_PORT", "50051"),
-		JWTSecret: getEnv("JWT_SECRET", ""),
+		DBName:     getEnv("DB_NAME", "session_management"),
+		GRPCPort:   getEnv("GRPC_PORT", "50051"),
+		JWTSecret:  getEnv("JWT_SECRET", ""),
 	}
 
 	// Validate required config
