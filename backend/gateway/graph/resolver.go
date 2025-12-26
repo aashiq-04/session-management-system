@@ -6,6 +6,7 @@ import (
 	"net"
 	"github.com/aashiq-04/session-management-system/backend/gateway/clients"
 )
+
 func extractRealIP(r *http.Request) string {
     // X-Forwarded-For (proxy)
     if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {

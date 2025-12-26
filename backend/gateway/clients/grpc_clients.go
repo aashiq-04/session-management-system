@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	comppb "github.com/aashiq-04/session-management-system/backend/services/audit-service/proto/compliance"
+
 )
 
 // GRPCClients holds all gRPC client connections

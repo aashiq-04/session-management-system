@@ -264,3 +264,35 @@ type Mutation {
   # Security mutations
   resolveSecurityAlert(alertId: ID!): GenericResponse!
 }
+type SOC2Overview {
+  organizationId: ID!
+
+  accessControl: AccessControlMetrics!
+  authentication: AuthenticationMetrics!
+  systemOperations: SystemOperationsMetrics!
+  securityIncidents: SecurityIncidentMetrics!
+}
+
+type AccessControlMetrics {
+  totalUsers: Int!
+  adminUsers: Int!
+}
+
+type AuthenticationMetrics {
+  mfaEnabledPercentage: Float!
+  failedLogins30Days: Int!
+  authzDenials30Days: Int!
+}
+
+type SystemOperationsMetrics {
+  activeSessions: Int!
+  unresolvedAlerts: Int!
+}
+
+type SecurityIncidentMetrics {
+  highSeverityAlerts: Int!
+  mediumSeverityAlerts: Int!
+}
+extend type Query {
+  soc2Overview: SOC2Overview!
+}
