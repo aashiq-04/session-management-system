@@ -44,11 +44,11 @@ func (r *OrganizationRepository) GetPrimaryOrganizationID(userID string) (string
 // CreateOrganization creates a new organization
 func (r *OrganizationRepository) CreateOrganization(org *models.Organization) error {
 	const query = `
-		INSERT INTO organizations (id, name, created_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO organizations (id, name, slug, created_at)
+		VALUES ($1, $2, $3, $4)
 	`
 
-	_, err := r.db.Exec(query, org.ID, org.Name, org.CreatedAt)
+	_, err := r.db.Exec(query, org.ID, org.Name, org.Slug, org.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create organization: %w", err)
 	}

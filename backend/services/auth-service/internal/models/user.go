@@ -19,6 +19,7 @@ type User struct {
 type Organization struct {
 	ID        string    `db:"id"`
 	Name      string    `db:"name"`
+	Slug      string    `db:"slug"`
 	CreatedAt time.Time `db:"created_at"`
 }
 

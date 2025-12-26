@@ -74,4 +74,3 @@ func (c *GRPCClients) CheckPermission(
 
 	return resp.Allowed
 }
-

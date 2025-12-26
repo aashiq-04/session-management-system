@@ -9,16 +9,18 @@ import (
 
 // JWTClaims represents the claims in a JWT token
 type JWTClaims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID 			string `json:"user_id"`
+	Email  			string `json:"email"`
+	OrganizationID 	string `json:"organization_id"`
 	jwt.RegisteredClaims
 }
 
 // GenerateAccessToken generates a short-lived access token (15 minutes)
-func GenerateAccessToken(userID, email, jwtSecret string) (string, error) {
+func GenerateAccessToken(userID, email, orgID,jwtSecret string) (string, error) {
 	claims := JWTClaims{
 		UserID: userID,
 		Email:  email,
+		OrganizationID: orgID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -38,10 +40,11 @@ func GenerateAccessToken(userID, email, jwtSecret string) (string, error) {
 }
 
 // GenerateRefreshToken generates a long-lived refresh token (7 days)
-func GenerateRefreshToken(userID, email, jwtSecret string) (string, error) {
+func GenerateRefreshToken(userID, email, orgID, jwtSecret string) (string, error) {
 	claims := JWTClaims{
 		UserID: userID,
 		Email:  email,
+		OrganizationID: orgID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

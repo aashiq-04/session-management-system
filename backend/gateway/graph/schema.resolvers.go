@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+
 	"errors"
 
 	"github.com/aashiq-04/session-management-system/backend/gateway/graph/generated"
@@ -17,7 +18,7 @@ import (
 	auditpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/audit"
 	authpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/auth"
 	sessionpb "github.com/aashiq-04/session-management-system/backend/gateway/proto/session"
-	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
+	// authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
 )
 
 func getRealIP(ctx context.Context) string {
@@ -281,6 +282,7 @@ func (r *mutationResolver) ResolveSecurityAlert(ctx context.Context, alertID str
 // Me returns the current user's profile
 func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	user, ok := middleware.GetUserFromContext(ctx)
+
 	if !ok {
 		return nil, fmt.Errorf("unauthorized")
 	}
@@ -501,21 +503,21 @@ func (r *queryResolver) AuditLogs(ctx context.Context, limit *int, offset *int, 
 	userID := middleware.GetUserIDFromContext(ctx)
 
 	// TEMP: single-org setup
-	orgID := "default-org-id"
+	orgID := middleware.GetOrganizationIDFromContext(ctx)
+	if orgID == "" {
+		return nil, fmt.Errorf("FORBIDDEN")
+	}
 
-	authzResp, err := r.Clients.AuthzClient.CanUserPerform(ctx, &authzpb.AuthorizationRequest{
-		UserId:         userID,
-		OrganizationId: orgID,
-		Permission:     "view_audit_logs",
-	})
-
-	if err != nil || !authzResp.Allowed {
+	allowed := r.Clients.CheckPermission(ctx, userID, orgID, "view_audit_logs")
+	if !allowed {
 		return nil, fmt.Errorf("forbidden: insufficient permissions to view audit logs")
 	}
+
 	// ---- END RBAC ENFORCEMENT ----
 
 
 	user, ok := middleware.GetUserFromContext(ctx)
+	
 	if !ok {
 		return nil, fmt.Errorf("unauthorized")
 	}

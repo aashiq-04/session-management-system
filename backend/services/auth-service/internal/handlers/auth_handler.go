@@ -110,10 +110,15 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 
 	// --- STEP 4A: Create default organization for new user ---
 	orgRepo := repository.NewOrganizationRepository(h.db)
+
+	orgName := fmt.Sprintf("%s's Organization", user.FullName)
+	orgSlug := utils.GenerateSlug(orgName)
+	log.Printf("Creating org: name=%s, slug=%s", orgName, orgSlug)
 	orgID := uuid.New().String()
 	err = orgRepo.CreateOrganization(&models.Organization{
 		ID:        orgID,
-		Name:      fmt.Sprintf("%s's Organization", user.FullName),
+		Name:      orgName,
+		Slug:      orgSlug,
 		CreatedAt: time.Now(),
 	})
 	if err != nil {
@@ -133,6 +138,7 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		}, nil
 	}
 
+
 	err = h.repo.AssignRoleToUser(userID, orgID, "ORG_ADMIN")
 	if err != nil {
 		log.Printf("Failed to assign org admin role: %v", err)
@@ -150,7 +156,7 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	}
 
 	// Generate JWT tokens
-	accessToken, err := utils.GenerateAccessToken(userID, req.Email, h.jwtSecret)
+	accessToken, err := utils.GenerateAccessToken(userID, req.Email, orgID, h.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to generate access token: %v", err)
 		return &pb.RegisterResponse{
@@ -159,7 +165,7 @@ func (h *AuthHandler) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 		}, nil
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(userID, req.Email, h.jwtSecret)
+	refreshToken, err := utils.GenerateRefreshToken(userID, req.Email, orgID, h.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to generate refresh token: %v", err)
 		return &pb.RegisterResponse{
@@ -294,6 +300,15 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 			}, nil
 		}
 	}
+	orgRepo := repository.NewOrganizationRepository(h.db)
+	orgID, err := orgRepo.GetPrimaryOrganizationID(user.ID)
+	if err != nil {
+		log.Printf("Failed to get organization for user %s: %v", user.ID, err)
+		return &pb.LoginResponse{
+			Success: false,
+			Message: "Organization context missing",
+		}, nil
+	}
 
 	// Create or get device
 	deviceID, isNewDevice, err := h.handleDevice(req.DeviceInfo, user.ID)
@@ -322,7 +337,7 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	h.detectAndCreateAlerts(user.ID, req.DeviceInfo, isNewDevice)
 
 	// Generate JWT tokens
-	accessToken, err := utils.GenerateAccessToken(user.ID, user.Email, h.jwtSecret)
+	accessToken, err := utils.GenerateAccessToken(user.ID, user.Email, orgID, h.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to generate access token: %v", err)
 		return &pb.LoginResponse{
@@ -331,7 +346,7 @@ func (h *AuthHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 		}, nil
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, h.jwtSecret)
+	refreshToken, err := utils.GenerateRefreshToken(user.ID, user.Email, orgID, h.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to generate refresh token: %v", err)
 		return &pb.LoginResponse{
@@ -440,7 +455,7 @@ func (h *AuthHandler) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 	}
 
 	// Generate new access token
-	newAccessToken, err := utils.GenerateAccessToken(claims.UserID, claims.Email, h.jwtSecret)
+	newAccessToken, err := utils.GenerateAccessToken(claims.UserID, claims.Email, claims.OrganizationID, h.jwtSecret)
 	if err != nil {
 		return &pb.RefreshTokenResponse{
 			Success: false,

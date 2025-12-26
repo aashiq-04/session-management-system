@@ -17,12 +17,14 @@ const UserContextKey ContextKey = "user"
 type UserContext struct {
 	UserID string
 	Email  string
+	OrganizationID string
 }
 
 // JWTClaims represents JWT token claims
 type JWTClaims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
+	OrganizationID string `json:"organization_id"`
 	jwt.RegisteredClaims
 }
 
@@ -64,6 +66,7 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 				userCtx := &UserContext{
 					UserID: claims.UserID,
 					Email:  claims.Email,
+					OrganizationID: claims.OrganizationID,
 				}
 				ctx := context.WithValue(r.Context(), UserContextKey, userCtx)
 				next.ServeHTTP(w, r.WithContext(ctx))
@@ -88,4 +91,13 @@ func GetUserIDFromContext(ctx context.Context) string {
 		return ""
 	}
 	return user.UserID
+}
+
+// GetOrganizationIDFromContext retrieves the organization ID from context
+func GetOrganizationIDFromContext(ctx context.Context) string {
+	user, ok := GetUserFromContext(ctx)
+	if !ok || user == nil {
+		return ""
+	}
+	return user.OrganizationID
 }
