@@ -252,8 +252,11 @@ func (r *queryResolver) Me(ctx context.Context) (*model.User, error) {
 	}
 
 	if !resp.Success {
-		return nil, errors.New(err.Error())
-
+		errorMsg := resp.Message
+		if errorMsg == "" {
+			errorMsg = "failed to get user profile"
+		}
+		return nil, errors.New(errorMsg)
 	}
 
 	return &model.User{
@@ -357,8 +360,11 @@ func (r *queryResolver) SessionDetails(ctx context.Context, sessionID string) (*
 	}
 
 	if !resp.Success || resp.Session == nil {
-		return nil, errors.New(err.Error())
-
+		errorMsg := resp.Message
+		if errorMsg == "" {
+			errorMsg = "failed to get session details"
+		}
+		return nil, errors.New(errorMsg)
 	}
 
 	s := resp.Session
