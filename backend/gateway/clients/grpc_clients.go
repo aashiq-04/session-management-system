@@ -11,6 +11,7 @@ import (
 	authzpb "github.com/aashiq-04/session-management-system/backend/services/auth-service/proto/authorization"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	comppb "github.com/aashiq-04/session-management-system/backend/services/audit-service/proto/compliance"
 )
 
 // GRPCClients holds all gRPC client connections
@@ -19,6 +20,7 @@ type GRPCClients struct {
 	SessionClient sessionpb.SessionServiceClient
 	AuditClient   auditpb.AuditServiceClient
 	AuthzClient   authzpb.AuthorizationServiceClient
+	ComplianceClient comppb.ComplianceServiceClient
 }
 
 // NewGRPCClients creates and initializes all gRPC clients
@@ -43,13 +45,19 @@ func NewGRPCClients(authURL, sessionURL, auditURL string) (*GRPCClients, error) 
 		return nil, fmt.Errorf("failed to connect to audit service: %w", err)
 	}
 	log.Printf("Connected to Audit Service at %s", auditURL)
+	complianceConn, err := grpc.Dial(auditURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to compliance service: %w", err)
+	}
+	log.Printf("Connected to Compliance Service at %s", auditURL)
 
 	return &GRPCClients{
 		AuthClient:    authpb.NewAuthServiceClient(authConn),
 		SessionClient: sessionpb.NewSessionServiceClient(sessionConn),
 		AuditClient:   auditpb.NewAuditServiceClient(auditConn),
 		AuthzClient:   authzpb.NewAuthorizationServiceClient(authConn),
-	}, nil
+		ComplianceClient: comppb.NewComplianceServiceClient(complianceConn),
+		}, nil
 }
 func (c *GRPCClients) CheckPermission(
 	ctx context.Context,

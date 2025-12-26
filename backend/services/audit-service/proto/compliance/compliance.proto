@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package compliance;
+
+option go_package = "github.com/aashiq-04/session-management-system/backend/services/audit-service/proto/compliance";
+
+service ComplianceService {
+  rpc GetSOC2Overview (SOC2Request) returns (SOC2OverviewResponse);
+}
+
+message SOC2Request {
+  string organization_id = 1;
+}
+
+// ---- Response Models ----
+
+message SOC2OverviewResponse {
+  string organization_id = 1;
+
+  AccessControlMetrics access_control = 2;
+  AuthenticationMetrics authentication = 3;
+  SystemOperationsMetrics system_operations = 4;
+  SecurityIncidentMetrics security_incidents = 5;
+}
+
+message AccessControlMetrics {
+  int32 total_users = 1;
+  int32 admin_users = 2;
+}
+
+message AuthenticationMetrics {
+  double mfa_enabled_percentage = 1;
+  int32 failed_logins_30_days = 2;
+  int32 authz_denials_30_days = 3;
+}
+
+message SystemOperationsMetrics {
+  int32 active_sessions = 1;
+  int32 unresolved_alerts = 2;
+}
+
+message SecurityIncidentMetrics {
+  int32 high_severity_alerts = 1;
+  int32 medium_severity_alerts = 2;
+}

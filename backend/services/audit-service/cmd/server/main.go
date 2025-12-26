@@ -15,7 +15,9 @@ import (
 	"google.golang.org/grpc/reflection"
 	"github.com/joho/godotenv"
 	"github.com/aashiq-04/session-management-system/backend/services/audit-service/internal/handlers"
+	"github.com/aashiq-04/session-management-system/backend/services/audit-service/internal/compliance"
 	pb "github.com/aashiq-04/session-management-system/backend/services/audit-service/proto"
+	compb "github.com/aashiq-04/session-management-system/backend/services/audit-service/proto/compliance"
 )
 
 func main() {
@@ -40,6 +42,11 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(db)
 	pb.RegisterAuditServiceServer(grpcServer, auditHandler)
 
+	complianceRepo := compliance.NewRepository(db)
+	complianceService := compliance.NewService(complianceRepo)
+	complianceHandler := handlers.NewComplianceHandler(complianceService)
+
+	compb.RegisterComplianceServiceServer(grpcServer, complianceHandler)
 	// Enable reflection for grpcurl/grpc-ui
 	reflection.Register(grpcServer)
 
